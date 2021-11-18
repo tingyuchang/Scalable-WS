@@ -1,0 +1,57 @@
+version: "3"
+services:
+  zookeeper:
+    image: 'confluentinc/cp-zookeeper:5.5.0'
+    container_name: ws-zookeeper
+    environment:
+      - ZOOKEEPER_CLIENT_PORT=2181
+  kafka:
+    image: 'confluentinc/cp-kafka:5.5.0'
+    container_name: kafka
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_ZOOKEEPER_CONNECT=ws-zookeeper:2181
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+    depends_on:
+      - zookeeper
+  client:
+    image: python_kafka_test_client
+    container_name: python_kafka_test_client
+    depends_on: 
+      - kafka
+    entrypoint: 
+      - bash 
+      - -c 
+      - |
+        echo 'Giving Kafka a bit of time to start up…'
+        sleep 30
+        # Run the client code
+        python /python_kafka_test_client.py kafka:9092
+  go-ws-1:
+      image: go-ws-app
+      container_name: ws-1
+      environment:
+        - NAME=WS1
+        - KAFKA_ADDR=kafka:9092
+        - GROUPID=0
+      depends_on:
+        - kafka
+  go-ws-2:
+      image: go-ws-app
+      container_name: ws-2
+      environment:
+        - NAME=WS2
+        - KAFKA_ADDR=kafka:9092
+        - GROUPID=1
+      depends_on:
+        - kafka
+  ws-lb:
+     image: nginx
+     container_name: ws-lb
+     ports:
+       - '8080:8080'
+     volumes:
+       - ./nginx.conf:/etc/nginx/nginx.conf
+     depends_on:
+       - go-ws-1
